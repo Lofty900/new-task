@@ -1,0 +1,52 @@
+# azure-pipelines.frontend.yml
+trigger:
+- main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  dockerRegistryServiceConnection: '<your-docker-registry-service-connection>'
+  imageRepository: '<your-docker-image-repository>'
+  containerRegistry: '<your-container-registry>'
+  dockerfilePath: 'src/main/js/Dockerfile.frontend'
+  tag: '$(Build.BuildId)'
+
+stages:
+- stage: Build
+  jobs:
+  - job: Build
+    steps:
+    - task: NodeTool@0
+      inputs:
+        versionSpec: '12.x'
+      displayName: 'Install Node.js'
+
+    - script: |
+        npm install
+        npm run build
+      workingDirectory: 'src/main/js'
+      displayName: 'npm install and build'
+
+    - task: Docker@2
+      inputs:
+        containerRegistry: '$(dockerRegistryServiceConnection)'
+        repository: '$(imageRepository)-frontend'
+        command: 'buildAndPush'
+        Dockerfile: '$(dockerfilePath)'
+        tags: |
+          $(tag)
+
+- stage: Deploy
+  jobs:
+  - deployment: Deploy
+    environment: 'production'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: AzureWebAppContainer@1
+            inputs:
+              azureSubscription: '<your-azure-subscription>'
+              appName: '<your-app-service-name>'
+              imageName: '$(containerRegistry)/$(imageRepository)-frontend:$(tag)'

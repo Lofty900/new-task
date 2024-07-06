@@ -1,0 +1,46 @@
+# azure-pipelines.backend.yml
+trigger:
+- main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  dockerRegistryServiceConnection: '<your-docker-registry-service-connection>'
+  imageRepository: '<your-docker-image-repository>'
+  containerRegistry: '<your-container-registry>'
+  dockerfilePath: 'Dockerfile.backend'
+  tag: '$(Build.BuildId)'
+
+stages:
+- stage: Build
+  jobs:
+  - job: Build
+    steps:
+    - task: Maven@3
+      inputs:
+        mavenPomFile: 'pom.xml'
+        goals: 'clean install'
+
+    - task: Docker@2
+      inputs:
+        containerRegistry: '$(dockerRegistryServiceConnection)'
+        repository: '$(imageRepository)-backend'
+        command: 'buildAndPush'
+        Dockerfile: '$(dockerfilePath)'
+        tags: |
+          $(tag)
+
+- stage: Deploy
+  jobs:
+  - deployment: Deploy
+    environment: 'production'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: AzureWebAppContainer@1
+            inputs:
+              azureSubscription: '<your-azure-subscription>'
+              appName: '<your-app-service-name>'
+              imageName: '$(containerRegistry)/$(imageRepository)-backend:$(tag)'
